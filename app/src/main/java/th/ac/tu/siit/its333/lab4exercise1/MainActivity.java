@@ -10,18 +10,24 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import org.w3c.dom.Text;
 
 
 public class MainActivity extends ActionBarActivity {
 
     CourseDBHelper helper;
+    SimpleCursorAdapter adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        helper = new CourseDBHelper(this.getApplicationContext());
     }
 
     @Override
@@ -29,7 +35,27 @@ public class MainActivity extends ActionBarActivity {
         super.onResume();
 
         // This method is called when this activity is put foreground.
+        SQLiteDatabase db = helper.getReadableDatabase();
+        Cursor cursor = db.rawQuery(
+                "SELECT SUM(value*credit) gp, SUM(credit) cr FROM course;", null);
+        cursor.moveToFirst();
+        double gp = cursor.getDouble(0);
+        int cr = cursor.getInt(1);
+        double gpa = 0.0;
 
+        if (cr != 0) {
+            gpa = gp/cr;
+        }
+
+        TextView tvGP = (TextView)findViewById(R.id.tvGP);
+        TextView tvCR = (TextView)findViewById(R.id.tvCR);
+        TextView tvGPA = (TextView)findViewById(R.id.tvGPA);
+
+        tvGP.setText(String.format("%.1f", gp));
+        tvCR.setText(String.format("%d", cr));
+        tvGPA.setText(String.format("%.2f", gpa));
+
+        db.close();
     }
 
     public void buttonClicked(View v) {
@@ -48,7 +74,9 @@ public class MainActivity extends ActionBarActivity {
                 break;
 
             case R.id.btReset:
-
+                SQLiteDatabase db = helper.getWritableDatabase();
+                db.delete("course", "", null);
+                this.onResume();
                 break;
         }
     }
@@ -61,13 +89,33 @@ public class MainActivity extends ActionBarActivity {
                 int credit = data.getIntExtra("credit", 0);
                 String grade = data.getStringExtra("grade");
 
+                SQLiteDatabase db = helper.getWritableDatabase();
+                ContentValues r = new ContentValues();
+                r.put("code", code);
+                r.put("credit", credit);
+                r.put("grade", grade);
+                r.put("value", gradeToValue(grade));
+                long newId = db.insert("course", null, r);
+
+                if (newId != -1) {
+                    Toast t = Toast.makeText(this.getApplicationContext(),
+                            "Successfully added a new grade",
+                            Toast.LENGTH_SHORT);
+                    t.show();
+                }
+                else {
+                    Toast t = Toast.makeText(this.getApplicationContext(),
+                            "Unable to add a new grade",
+                            Toast.LENGTH_SHORT);
+                    t.show();
+                }
             }
         }
 
         Log.d("course", "onActivityResult");
     }
 
-    double gradeToValue(String g) {
+    static double gradeToValue(String g) {
         if (g.equals("A"))
             return 4.0;
         else if (g.equals("B+"))
